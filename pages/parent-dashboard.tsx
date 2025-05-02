@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "../lib/firebase";
 import { useRouter } from "next/router";
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { signOut } from "firebase/auth";
 import Link from "next/link";
 
 export default function NannyDashboard() {
@@ -28,15 +38,18 @@ export default function NannyDashboard() {
         where("sharedWith", "array-contains", user.uid)
       );
       const snapshot = await getDocs(q);
-      const babyList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const babyList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
       setBabies(babyList);
     };
 
     const fetchAccessRequests = async () => {
       const snapshot = await getDocs(collection(db, "accessRequests"));
       const requestList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(req => req.status !== "rejected"); // rejected 상태 제외
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((req) => req.status !== "rejected"); // rejected 상태 제외
       setRequests(requestList);
     };
 
@@ -56,17 +69,19 @@ export default function NannyDashboard() {
         return;
       }
 
-      // 승인 처리
       const currentShared = babyDoc.data().sharedWith || [];
       await updateDoc(babyRef, {
         sharedWith: [...new Set([...currentShared, req.requestedBy])],
       });
 
-      // 요청 문서 삭제
       await deleteDoc(doc(db, "accessRequests", req.id));
 
       alert("✅ 승인되었습니다!");
-      fetchAccessRequests(); // 목록 갱신
+      const snapshot = await getDocs(collection(db, "accessRequests"));
+      const requestList = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((req) => req.status !== "rejected");
+      setRequests(requestList);
     } catch (err) {
       console.error(err);
       alert("⚠️ 승인 중 문제가 발생했습니다.");
@@ -75,12 +90,8 @@ export default function NannyDashboard() {
 
   const handleReject = async (id: string) => {
     try {
-      // 거절 처리: 요청 문서 삭제
       await deleteDoc(doc(db, "accessRequests", id));
-
-      // 거절된 요청 목록에서 제거
-      setRequests((prevRequests) => prevRequests.filter(request => request.id !== id));
-
+      setRequests((prev) => prev.filter((req) => req.id !== id));
       alert("❌ 거절되었습니다.");
     } catch (err) {
       console.error(err);
@@ -90,12 +101,8 @@ export default function NannyDashboard() {
 
   const handleDeleteBaby = async (babyId: string) => {
     try {
-      // 아기 삭제 처리
       await deleteDoc(doc(db, "babies", babyId));
-
-      // 삭제된 아기 목록에서 제거
-      setBabies((prevBabies) => prevBabies.filter((baby) => baby.id !== babyId));
-
+      setBabies((prev) => prev.filter((baby) => baby.id !== babyId));
       alert("✅ 아기가 삭제되었습니다.");
     } catch (err) {
       console.error(err);
@@ -103,12 +110,59 @@ export default function NannyDashboard() {
     }
   };
 
-  return (
-    <div style={{ padding: "20px", backgroundColor: "#f9f9f9", minHeight: "100vh", color: "#222" }}>
-      <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "10px" }}>안녕하세요, {userData.name} 님 👋</h1>
-      <h2 style={{ fontSize: "24px", color: "#555", marginBottom: "20px" }}>역할: 보호자</h2>
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/login");
+    } catch (err) {
+      console.error("로그아웃 실패:", err);
+      alert("⚠️ 로그아웃 중 오류가 발생했습니다.");
+    }
+  };
 
-      {/* ✅ 아기 등록 버튼 추가 */}
+  return (
+    <div
+      style={{
+        padding: "20px",
+        backgroundColor: "#f9f9f9",
+        minHeight: "100vh",
+        color: "#222",
+        position: "relative",
+      }}
+    >
+      {/* 로그아웃 버튼 */}
+      <button
+        onClick={handleLogout}
+        style={{
+          position: "absolute",
+          top: "20px",
+          right: "20px",
+          backgroundColor: "#555",
+          color: "white",
+          border: "none",
+          padding: "8px 14px",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontSize: "14px",
+          transition: "background-color 0.3s",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor = "#333")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor = "#555")
+        }
+      >
+        🚪 로그아웃
+      </button>
+
+      <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "10px" }}>
+        안녕하세요, {userData.name} 님 👋
+      </h1>
+      <h2 style={{ fontSize: "24px", color: "#555", marginBottom: "20px" }}>
+        역할: 보호자
+      </h2>
+
       <button
         onClick={() => router.push("/register-baby")}
         style={{
@@ -132,18 +186,28 @@ export default function NannyDashboard() {
       ) : (
         <ul style={{ listStyleType: "none", padding: "0" }}>
           {babies.map((baby) => (
-            <li key={baby.id} style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              borderBottom: "1px solid #ddd",
-              padding: "12px",
-              marginBottom: "8px",
-              backgroundColor: "#fff",
-              borderRadius: "6px",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-            }}>
-              <Link href={`/baby/${baby.id}`} style={{ color: "#4CAF50", textDecoration: "none", fontWeight: "500" }}>
+            <li
+              key={baby.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid #ddd",
+                padding: "12px",
+                marginBottom: "8px",
+                backgroundColor: "#fff",
+                borderRadius: "6px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+              }}
+            >
+              <Link
+                href={`/baby/${baby.id}`}
+                style={{
+                  color: "#4CAF50",
+                  textDecoration: "none",
+                  fontWeight: "500",
+                }}
+              >
                 {baby.name} ({baby.birthdate})
               </Link>
               <button
@@ -157,8 +221,12 @@ export default function NannyDashboard() {
                   cursor: "pointer",
                   transition: "background-color 0.3s",
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#d32f2f"}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f44336"}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = "#d32f2f")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = "#f44336")
+                }
               >
                 ❌ 삭제
               </button>
@@ -167,8 +235,9 @@ export default function NannyDashboard() {
         </ul>
       )}
 
-      {/* 📝 접근 요청 목록 */}
-      <h3 style={{ fontSize: "20px", marginBottom: "10px" }}>🔐 접근 요청 목록:</h3>
+      <h3 style={{ fontSize: "20px", marginBottom: "10px" }}>
+        🔐 접근 요청 목록:
+      </h3>
       {requests.length === 0 ? (
         <p>접근 요청이 없습니다.</p>
       ) : (
@@ -198,8 +267,12 @@ export default function NannyDashboard() {
                     cursor: "pointer",
                     transition: "background-color 0.3s",
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#388E3C"}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#4CAF50"}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = "#388E3C")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = "#4CAF50")
+                  }
                 >
                   ✅ 승인
                 </button>
@@ -214,8 +287,12 @@ export default function NannyDashboard() {
                     cursor: "pointer",
                     transition: "background-color 0.3s",
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#d32f2f"}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f44336"}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = "#d32f2f")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = "#f44336")
+                  }
                 >
                   ❌ 거절
                 </button>

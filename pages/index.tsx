@@ -1,17 +1,17 @@
-// pages/index.tsx
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function IndexPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkUserAndRedirect = async () => {
-      const user = auth.currentUser;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        router.push("/login"); // 또는 로그인 화면
+        router.push("/login");
         return;
       }
 
@@ -22,7 +22,6 @@ export default function IndexPage() {
       }
 
       const userInfo = userDoc.data();
-
       if (userInfo.role === "parent") {
         router.push("/parent-dashboard");
       } else if (userInfo.role === "nanny") {
@@ -30,9 +29,9 @@ export default function IndexPage() {
       } else {
         alert("올바르지 않은 사용자 역할입니다.");
       }
-    };
+    });
 
-    checkUserAndRedirect();
+    return () => unsubscribe();
   }, []);
 
   return <div>로딩 중입니다...</div>;

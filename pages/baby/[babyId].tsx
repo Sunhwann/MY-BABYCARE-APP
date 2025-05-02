@@ -1,3 +1,4 @@
+// BabyPage.tsx
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { db } from "../../lib/firebase";
@@ -8,6 +9,7 @@ import {
   getDocs,
   query,
   setDoc,
+  deleteDoc,
   where,
 } from "firebase/firestore";
 import DatePicker from "react-datepicker";
@@ -22,6 +24,7 @@ export default function BabyPage() {
   const [babyData, setBabyData] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedHour, setSelectedHour] = useState<number>(12);
+  const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedType, setSelectedType] = useState<string>("분유");
   const [amount, setAmount] = useState<string>("");
 
@@ -29,8 +32,8 @@ export default function BabyPage() {
   const [weekStartDate, setWeekStartDate] = useState<Date>(
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
+  const [activeTab, setActiveTab] = useState<'input' | 'output'>('input');
 
-  // 아기 정보 가져오기
   useEffect(() => {
     const fetchBaby = async () => {
       if (!babyId) return;
@@ -43,10 +46,8 @@ export default function BabyPage() {
     fetchBaby();
   }, [babyId]);
 
-  // 주간 기록 가져오기
   const fetchRecords = async () => {
     if (!babyId || !weekStartDate) return;
-
     const start = new Date(weekStartDate);
     const end = addDays(start, 6);
     const q = query(
@@ -57,7 +58,7 @@ export default function BabyPage() {
     );
     const snapshot = await getDocs(q);
     const result: any[] = [];
-    snapshot.forEach((doc) => result.push(doc.data()));
+    snapshot.forEach((doc) => result.push({ id: doc.id, ...doc.data() }));
     setRecords(result);
   };
 
@@ -65,25 +66,45 @@ export default function BabyPage() {
     fetchRecords();
   }, [babyId, weekStartDate]);
 
-  // 기록 저장
   const handleSave = async () => {
     if (!babyId || !selectedDate || !selectedType) return;
-    if (selectedType === "분유" && !amount) return;
+    if ((selectedType === "분유" || selectedType === "모유") && !amount) return;
 
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const recordId = `${babyId}-${dateStr}-${selectedHour}-${selectedType}`;
+    const timeStr = `${String(selectedHour).padStart(2, "0")}:${String(selectedMinute).padStart(2, "0")}`;
+    const recordId = `${babyId}-${dateStr}-${timeStr}-${selectedType}`;
 
     await setDoc(doc(db, "records", recordId), {
       babyId,
       date: dateStr,
       hour: selectedHour,
+      minute: selectedMinute,
       type: selectedType,
-      value: selectedType === "분유" ? Number(amount) : 1,
+      value: selectedType === "분유" || selectedType === "모유" ? Number(amount) : 1,
       timestamp: new Date(),
     });
 
     setAmount("");
-    await fetchRecords(); // 기록 새로고침
+    await fetchRecords();
+  };
+
+  const handleDelete = async (recordId: string) => {
+    try {
+      await deleteDoc(doc(db, "records", recordId));
+      await fetchRecords();
+    } catch (error) {
+      console.error("Error deleting record:", error);
+    }
+  };
+
+  const handleEdit = async (recordId: string, newValue: string) => {
+    try {
+      const recordRef = doc(db, "records", recordId);
+      await setDoc(recordRef, { value: Number(newValue) }, { merge: true });
+      await fetchRecords();
+    } catch (error) {
+      console.error("Error editing record:", error);
+    }
   };
 
   const getWeekDays = (date: Date) => {
@@ -91,290 +112,145 @@ export default function BabyPage() {
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
   };
 
+  const handleTabChange = (tab: 'input' | 'output') => {
+    setActiveTab(tab);
+  };
+
   const days = getWeekDays(weekStartDate);
   const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = [0, 15, 30, 45];
+
+  const getSummary = (day: Date) => {
+    const dateStr = format(day, "yyyy-MM-dd");
+    const dayRecords = records.filter((r) => r.date === dateStr);
+
+    const milkTotal = dayRecords
+      .filter((r) => r.type === "분유")
+      .reduce((acc, r) => acc + Number(r.value || 0), 0);
+
+    const breastTime = dayRecords
+      .filter((r) => r.type === "모유")
+      .reduce((acc, r) => acc + Number(r.value || 0), 0);
+
+    const peeCount = dayRecords.filter((r) => r.type === "소변").length;
+    const poopCount = dayRecords.filter((r) => r.type === "대변").length;
+
+    return {
+      milkTotal,
+      breastTime,
+      totalMilk: milkTotal + breastTime * 3,
+      peeCount,
+      poopCount,
+    };
+  };
 
   return (
-<div style={{ backgroundColor: "#ffffff", color: "#000000", minHeight: "100vh", padding: "1rem" }}>
-
-
-{/* 1. 상단: 아기 정보 + 마이페이지 버튼 */}
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-<div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-  <h1 style={{ margin: 0 }}>👶 {babyData?.name}</h1>
-  <p style={{ margin: 0 }}>생일: {babyData?.birthdate}</p>
-</div>
-
-  <button
-    onClick={() => router.push("/")}
-    style={{
-      backgroundColor: "#0070f3",
-      color: "#fff",
-      border: "none",
-      borderRadius: "6px",
-      padding: "8px 16px",
-      cursor: "pointer",
-      fontWeight: "bold",
-      whiteSpace: "nowrap",
-    }}
-  >
-    🏠 마이페이지
-  </button>
-</div>
-
-
-     {/* 2. 중단: 기록 입력 */}
-<h2>📌 기록 입력</h2>
-<div
-  style={{
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
-    backgroundColor: "#f5f5f5",
-    padding: "1rem",
-    borderRadius: "8px",
-    marginTop: "1rem",
-    maxWidth: "600px",
-  }}
->
-  {/* 날짜 선택 */}
-  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-    <span style={{ minWidth: "80px", fontWeight: "bold" }}>📅 날짜</span>
-    <DatePicker
-      selected={selectedDate}
-      onChange={(date) => setSelectedDate(date!)}
-      dateFormat="yyyy-MM-dd"
-      locale={ko}
-    />
-  </div>
-
-  {/* 시간 선택 */}
-  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-    <span style={{ minWidth: "80px", fontWeight: "bold" }}>⏰ 시간</span>
-    <select
-      value={selectedHour}
-      onChange={(e) => setSelectedHour(Number(e.target.value))}
-      style={{ padding: "6px" }}
-    >
-      {hours.map((h) => (
-        <option key={h} value={h}>
-          {String(h).padStart(2, "0")}:00
-        </option>
-      ))}
-    </select>
-  </div>
-
-  {/* 기록 타입 선택 */}
-  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-    <span style={{ minWidth: "80px", fontWeight: "bold" }}>📄 종류</span>
-    <select
-      value={selectedType}
-      onChange={(e) => setSelectedType(e.target.value)}
-      style={{ padding: "6px" }}
-    >
-      <option value="분유">🍼 분유</option>
-      <option value="소변">💧 소변</option>
-      <option value="대변">💩 대변</option>
-    </select>
-  </div>
-
-  {/* 분유 용량 입력 (조건부) */}
-  {selectedType === "분유" && (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-      <span style={{ minWidth: "80px", fontWeight: "bold" }}>🍼 용량</span>
-      <input
-        type="number"
-        placeholder="ml"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        style={{ padding: "6px", width: "100px" }}
-      />
-    </div>
-  )}
-
-  {/* 저장 버튼 */}
-  <div style={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}>
-    <button
-      onClick={handleSave}
-      style={{
-        backgroundColor: "#28a745",
-        color: "#fff",
-        padding: "10px 20px",
-        borderRadius: "8px",
-        border: "none",
-        cursor: "pointer",
-        fontWeight: "bold",
-        fontSize: "16px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-      }}
-    >
-      💾 저장
-    </button>
-  </div>
-</div>
-
-     
-
-
-      {/* 3. 하단: 주간 기록 출력 */}
-      <h2 style={{ marginTop: "40px" }}>📅 주간 기록</h2>
-      <div style={{ marginBottom: "10px" }}>
-        주 시작일 선택:{" "}
-        <DatePicker
-          selected={weekStartDate}
-          onChange={(date) => setWeekStartDate(date!)}
-          dateFormat="yyyy-MM-dd"
-          locale={ko}
-        />
+    <div style={{ backgroundColor: "#ffffff", color: "#000000", minHeight: "100vh", padding: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+        <button onClick={() => handleTabChange('input')} style={{ backgroundColor: activeTab === 'input' ? '#0070f3' : '#f0f0f0', color: '#fff', padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+          📌 기록 입력
+        </button>
+        <button onClick={() => handleTabChange('output')} style={{ backgroundColor: activeTab === 'output' ? '#0070f3' : '#f0f0f0', color: '#fff', padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+          📌 기록 출력
+        </button>
       </div>
 
-      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "1rem", backgroundColor: "#ffffff" }}>
-  <thead>
-    <tr>
-      <th style={{ backgroundColor: "#333", color: "white", padding: "8px", border: "1px solid #ccc" }}></th>
-      {days.map((day, i) => (
-        <th
-          key={i}
-          colSpan={3}
-          style={{
-            backgroundColor: "#333",
-            color: "white",
-            textAlign: "center",
-            fontWeight: "bold",
-            padding: "8px",
-            border: "1px solid #ccc",
-          }}
-        >
-          {format(day, "M/d (E)", { locale: ko })}
-        </th>
-      ))}
-    </tr>
-    <tr>
-      <th style={{ backgroundColor: "#555", color: "white", padding: "6px", border: "1px solid #ccc" }}></th>
-      {days.map((_, i) => (
-        <React.Fragment key={i}>
-          <th style={{ backgroundColor: "#888", color: "white", padding: "6px", border: "1px solid #ccc" }}>분유</th>
-          <th style={{ backgroundColor: "#aaa", color: "black", padding: "6px", border: "1px solid #ccc" }}>소변</th>
-          <th style={{ backgroundColor: "#ccc", color: "black", padding: "6px", border: "1px solid #ccc" }}>대변</th>
-        </React.Fragment>
-      ))}
-    </tr>
-  </thead>
-  <tbody>
-    {hours.map((hour, rowIndex) => (
-      <tr
-        key={hour}
-        style={{
-          backgroundColor: rowIndex % 2 === 0 ? "#f9f9f9" : "#ffffff",
-        }}
-      >
-        <td
-          style={{
-            textAlign: "center",
-            fontWeight: "bold",
-            padding: "6px",
-            backgroundColor: "#eee",
-            border: "1px solid #ccc",
-          }}
-        >
-          {String(hour).padStart(2, "0")}:00
-        </td>
-        {days.map((day) => {
-          const dateStr = format(day, "yyyy-MM-dd");
-          return (
-            <React.Fragment key={dateStr}>
-              {["분유", "소변", "대변"].map((type) => {
-                const record = records.find(
-                  (r) => r.date === dateStr && r.hour === hour && r.type === type
-                );
-                const value = record?.value;
+      {activeTab === 'input' && (
+        <div>
+          <h2>📌 기록 입력</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", backgroundColor: "#f5f5f5", padding: "1rem", borderRadius: "8px", maxWidth: "600px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ minWidth: "80px", fontWeight: "bold" }}>📅 날짜</span>
+              <DatePicker selected={selectedDate} onChange={(date) => setSelectedDate(date!)} dateFormat="yyyy-MM-dd" locale={ko} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ minWidth: "80px", fontWeight: "bold" }}>⏰ 시간</span>
+              <select value={selectedHour} onChange={(e) => setSelectedHour(Number(e.target.value))}>
+                {hours.map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}시</option>)}
+              </select>
+              <select value={selectedMinute} onChange={(e) => setSelectedMinute(Number(e.target.value))}>
+                {minutes.map((m) => <option key={m} value={m}>{String(m).padStart(2, "0")}분</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ minWidth: "80px", fontWeight: "bold" }}>📄 종류</span>
+              <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                <option value="분유">🍼 분유</option>
+                <option value="모유">🤱 모유</option>
+                <option value="소변">💧 소변</option>
+                <option value="대변">💩 대변</option>
+              </select>
+            </div>
+            {(selectedType === "분유" || selectedType === "모유") && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ minWidth: "80px", fontWeight: "bold" }}>
+                  {selectedType === "분유" ? "🍼 용량" : "⏱️ 시간"}
+                </span>
+                <input type="number" placeholder={selectedType === "분유" ? "ml" : "분"} value={amount} onChange={(e) => setAmount(e.target.value)} style={{ padding: "6px", width: "100px" }} />
+              </div>
+            )}
+            <button onClick={handleSave} style={{ backgroundColor: "#28a745", color: "#fff", padding: "10px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}>
+              💾 저장
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'output' && (
+        <div>
+          <h2>📅 기록 출력</h2>
+          <div style={{ marginBottom: "10px" }}>
+            날짜 선택:{" "}
+            <DatePicker selected={selectedDate} onChange={(date) => setSelectedDate(date!)} dateFormat="yyyy-MM-dd" locale={ko} />
+          </div>
+
+          <div style={{ backgroundColor: "#f5f5f5", padding: "1rem", borderRadius: "8px" }}>
+            <h3>📅 {format(selectedDate, "M/d (E)", { locale: ko })} 기록</h3>
+            <ul>
+              {records
+                .filter((r) => r.date === format(selectedDate, "yyyy-MM-dd"))
+                .sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute))
+                .map((record) => (
+                  <li key={record.id}>
+                    {String(record.hour).padStart(2, "0")}:{String(record.minute).padStart(2, "0")} /{" "}
+                    {record.type === "분유" && `🍼 분유 / ${record.value}ml`}
+                    {record.type === "모유" && `🤱 모유 / ${record.value}분`}
+                    {record.type === "소변" && `💧 소변`}
+                    {record.type === "대변" && `💩 대변`}
+                    {["분유", "모유"].includes(record.type) && (
+                      <>
+                        {" "}
+                        <button
+                         className="text-blue-600 hover:underline cursor-pointer hover:scale-105 transition-transform duration-200"
+                          onClick={() => {
+                          const newValue = prompt("새 값 입력", String(record.value));
+                          if (newValue !== null) handleEdit(record.id, newValue);
+                        }}> 수정 </button>
+                        <button 
+                          className="text-red-600 hover:underline cursor-pointer hover:scale-105 transition-transform duration-200 ml-2"
+                          onClick={() => handleDelete(record.id)}>삭제</button>
+                      </>
+                    )}
+                  </li>
+              ))}
+            </ul>
+
+            <hr />
+            
+            <h4>📊 주간 요약</h4>
+            <ul>
+              {days.map((day) => {
+                const { milkTotal, breastTime, totalMilk, peeCount, poopCount } = getSummary(day);
                 return (
-                  <td
-                    key={type}
-                    style={{
-                      textAlign: "center",
-                      fontWeight: "500",
-                      padding: "6px",
-                      backgroundColor:
-                        type === "분유"
-                          ? "#e6f7ff"
-                          : type === "소변"
-                          ? "#fffbe6"
-                          : "#f9f0ff",
-                      color: "#000",
-                      border: "1px solid #ccc",
-                    }}
-                  >
-                    {type === "분유" ? value || "" : value ? "✅" : ""}
-                  </td>
+                  <li key={format(day, "yyyy-MM-dd")}>
+                    {format(day, "E", { locale: ko })}요일: 🍼 {milkTotal}ml + 🤱 {breastTime}분 = {totalMilk}ml / 💧 {peeCount}회 / 💩 {poopCount}회
+                  </li>
                 );
               })}
-            </React.Fragment>
-          );
-        })}
-      </tr>
-    ))}
-  </tbody>
-  <tfoot>
-    <tr style={{ backgroundColor: "#ddd" }}>
-      <td
-        style={{
-          fontWeight: "bold",
-          textAlign: "center",
-          padding: "6px",
-          color: "#000000",
-          border: "1px solid #ccc",
-        }}
-      >
-        일합계
-      </td>
-      {days.map((day) => {
-        const dateStr = format(day, "yyyy-MM-dd");
-        const sum = (type: string) =>
-          records
-            .filter((r) => r.date === dateStr && r.type === type)
-            .reduce((sum, r) => sum + Number(r.value || 0), 0);
-        return (
-          <React.Fragment key={dateStr}>
-            <td
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                color: "#000000",
-                border: "1px solid #ccc",
-              }}
-            >
-              {sum("분유")}
-            </td>
-            <td
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                color: "#000000",
-                border: "1px solid #ccc",
-              }}
-            >
-              {sum("소변")}
-            </td>
-            <td
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                color: "#000000",
-                border: "1px solid #ccc",
-              }}
-            >
-              {sum("대변")}
-            </td>
-          </React.Fragment>
-        );
-      })}
-    </tr>
-  </tfoot>
-</table>
-
-
-
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

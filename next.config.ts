@@ -8,3 +8,8 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+
+module.exports = {
+  trailingSlash: true, // 각 경로에 슬래시를 추가
+};

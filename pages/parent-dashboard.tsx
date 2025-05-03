@@ -45,7 +45,10 @@ export default function NannyDashboard() {
       setBabies(babyList);
     };
 
+    // accessRequests 문서의 타입 정의
     type RequestData = {
+      requestedBy: string;
+      babyId: string;
       status: string;
       [key: string]: any;
     };
@@ -53,7 +56,16 @@ export default function NannyDashboard() {
     const fetchAccessRequests = async () => {
       const snapshot = await getDocs(collection(db, "accessRequests"));
       const requestList = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .map((doc) => {
+          const data = doc.data() as RequestData;
+          return {
+            id: doc.id,
+            requestedBy: data.requestedBy,
+            babyId: data.babyId,
+            status: data.status,
+            ...data,
+          };
+        })
         .filter((req) => req.status !== "rejected"); // rejected 상태 제외
       setRequests(requestList);
     };
@@ -82,11 +94,23 @@ export default function NannyDashboard() {
       await deleteDoc(doc(db, "accessRequests", req.id));
 
       alert("✅ 승인되었습니다!");
+
+      // 승인 후 목록 갱신
       const snapshot = await getDocs(collection(db, "accessRequests"));
-      const requestList = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((req) => req.status !== "rejected");
-      setRequests(requestList);
+      const updatedList = snapshot.docs
+        .map((doc) => {
+          const data = doc.data() as RequestData;
+          return {
+            id: doc.id,
+            requestedBy: data.requestedBy,
+            babyId: data.babyId,
+            status: data.status,
+            ...data,
+          };
+        })
+        .filter((r) => r.status !== "rejected");
+      setRequests(updatedList);
+
     } catch (err) {
       console.error(err);
       alert("⚠️ 승인 중 문제가 발생했습니다.");

@@ -1,0 +1,1 @@
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[724],{7721:(_,e,s)=>{(window.__NEXT_P=window.__NEXT_P||[]).push(["/dashboard",function(){return s(9456)}])},9456:(_,e,s)=>{"use strict";s.r(e),s.d(e,{default:()=>n});var d=s(7876);let n=()=>(0,d.jsx)("div",{children:"대시보드 준비 중..."})}},_=>{var e=e=>_(_.s=e);_.O(0,[636,593,792],()=>e(7721)),_N_E=_.O()}]);

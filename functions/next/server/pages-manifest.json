@@ -1,0 +1,16 @@
+{
+  "/_app": "pages/_app.js",
+  "/_document": "pages/_document.js",
+  "/dashboard": "pages/dashboard.js",
+  "/baby/[babyId]": "pages/baby/[babyId].js",
+  "/api/hello": "pages/api/hello.js",
+  "/": "pages/index.js",
+  "/login": "pages/login.js",
+  "/nanny-dashboard": "pages/nanny-dashboard.js",
+  "/register-baby": "pages/register-baby.js",
+  "/register": "pages/register.js",
+  "/request-access": "pages/request-access.js",
+  "/requests": "pages/requests.js",
+  "/parent-dashboard": "pages/parent-dashboard.js",
+  "/_error": "pages/_error.js"
+}

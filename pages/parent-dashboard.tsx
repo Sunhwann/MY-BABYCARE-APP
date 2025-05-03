@@ -14,117 +14,94 @@ import {
 import { signOut } from "firebase/auth";
 import Link from "next/link";
 
+type Baby = {
+  id: string;
+  name: string;
+  birthdate: string;
+  sharedWith: string[];
+};
+
+type User = {
+  name: string;
+  role?: string;
+};
+
+type AccessRequest = {
+  id: string;
+  requestedBy: string;
+  babyId: string;
+  status: string;
+};
+
 export default function NannyDashboard() {
-  const [babies, setBabies] = useState<any[]>([]);
-  const [userData, setUserData] = useState<any>(null);
-  const [requests, setRequests] = useState<any[]>([]);
+  const [babies, setBabies] = useState<Baby[]>([]);
+  const [userData, setUserData] = useState<User | null>(null);
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    const fetchUserDataAndBabies = async () => {
+    const fetchAll = async () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      // 사용자 정보 가져오기
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (!userDoc.exists()) return;
 
-      const userInfo = userDoc.data();
+      const userInfo = userDoc.data() as User;
       setUserData(userInfo);
 
-      // sharedWith에 포함된 아기만 쿼리
-      const q = query(
-        collection(db, "babies"),
-        where("sharedWith", "array-contains", user.uid)
+      const babySnap = await getDocs(
+        query(collection(db, "babies"), where("sharedWith", "array-contains", user.uid))
       );
-      const snapshot = await getDocs(q);
-      const babyList = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setBabies(babyList);
-    };
+      setBabies(
+        babySnap.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Baby, "id">),
+        }))
+      );
 
-    // accessRequests 문서의 타입 정의
-    type RequestData = {
-      requestedBy: string;
-      babyId: string;
-      status: string;
-      [key: string]: any;
+      await fetchAccessRequests();
     };
 
     const fetchAccessRequests = async () => {
       const snapshot = await getDocs(collection(db, "accessRequests"));
-      const requestList = snapshot.docs
-        .map((doc) => {
-          const data = doc.data() as RequestData;
-          return {
-            id: doc.id,
-            requestedBy: data.requestedBy,
-            babyId: data.babyId,
-            status: data.status,
-            ...data,
-          };
-        })
-        .filter((req) => req.status !== "rejected"); // rejected 상태 제외
-      setRequests(requestList);
+      const filtered = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<AccessRequest, "id">) }))
+        .filter((r) => r.status !== "rejected");
+      setRequests(filtered);
     };
 
-    fetchUserDataAndBabies();
-    fetchAccessRequests();
+    fetchAll();
   }, []);
 
-  if (!userData) return <div>로딩 중...</div>;
-
-  const handleApprove = async (req: any) => {
+  const handleApprove = async (req: AccessRequest) => {
     try {
       const babyRef = doc(db, "babies", req.babyId);
       const babyDoc = await getDoc(babyRef);
+      if (!babyDoc.exists()) return alert("❌ 아기 정보를 찾을 수 없습니다.");
 
-      if (!babyDoc.exists()) {
-        alert("❌ 해당 아기 문서를 찾을 수 없습니다.");
-        return;
-      }
-
-      const currentShared = babyDoc.data().sharedWith || [];
+      const shared = babyDoc.data().sharedWith || [];
       await updateDoc(babyRef, {
-        sharedWith: [...new Set([...currentShared, req.requestedBy])],
+        sharedWith: Array.from(new Set([...shared, req.requestedBy])),
       });
 
       await deleteDoc(doc(db, "accessRequests", req.id));
-
-      alert("✅ 승인되었습니다!");
-
-      // 승인 후 목록 갱신
-      const snapshot = await getDocs(collection(db, "accessRequests"));
-      const updatedList = snapshot.docs
-        .map((doc) => {
-          const data = doc.data() as RequestData;
-          return {
-            id: doc.id,
-            requestedBy: data.requestedBy,
-            babyId: data.babyId,
-            status: data.status,
-            ...data,
-          };
-        })
-        .filter((r) => r.status !== "rejected");
-      setRequests(updatedList);
-
+      await refreshRequests();
+      alert("✅ 접근 요청을 승인했습니다.");
     } catch (err) {
       console.error(err);
-      alert("⚠️ 승인 중 문제가 발생했습니다.");
+      alert("⚠️ 승인 처리 중 오류가 발생했습니다.");
     }
   };
 
   const handleReject = async (id: string) => {
     try {
       await deleteDoc(doc(db, "accessRequests", id));
-      setRequests((prev) => prev.filter((req) => req.id !== id));
-      alert("❌ 거절되었습니다.");
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+      alert("❌ 요청이 거절되었습니다.");
     } catch (err) {
       console.error(err);
-      alert("⚠️ 거절 처리 중 오류가 발생했습니다.");
+      alert("⚠️ 거절 처리 중 오류 발생.");
     }
   };
 
@@ -132,10 +109,10 @@ export default function NannyDashboard() {
     try {
       await deleteDoc(doc(db, "babies", babyId));
       setBabies((prev) => prev.filter((baby) => baby.id !== babyId));
-      alert("✅ 아기가 삭제되었습니다.");
+      alert("✅ 아기를 삭제했습니다.");
     } catch (err) {
       console.error(err);
-      alert("⚠️ 아기 삭제 중 오류가 발생했습니다.");
+      alert("⚠️ 삭제 중 오류 발생.");
     }
   };
 
@@ -145,21 +122,22 @@ export default function NannyDashboard() {
       router.push("/login");
     } catch (err) {
       console.error("로그아웃 실패:", err);
-      alert("⚠️ 로그아웃 중 오류가 발생했습니다.");
+      alert("⚠️ 로그아웃 오류.");
     }
   };
 
+  const refreshRequests = async () => {
+    const snapshot = await getDocs(collection(db, "accessRequests"));
+    const updated = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<AccessRequest, "id">) }))
+      .filter((r) => r.status !== "rejected");
+    setRequests(updated);
+  };
+
+  if (!userData) return <div>로딩 중...</div>;
+
   return (
-    <div
-      style={{
-        padding: "20px",
-        backgroundColor: "#f9f9f9",
-        minHeight: "100vh",
-        color: "#222",
-        position: "relative",
-      }}
-    >
-      {/* 로그아웃 버튼 */}
+    <div style={{ padding: "20px", backgroundColor: "#f9f9f9", minHeight: "100vh", position: "relative" }}>
       <button
         onClick={handleLogout}
         style={{
@@ -167,30 +145,19 @@ export default function NannyDashboard() {
           top: "20px",
           right: "20px",
           backgroundColor: "#555",
-          color: "white",
-          border: "none",
-          padding: "8px 14px",
+          color: "#fff",
           borderRadius: "6px",
+          padding: "8px 14px",
           cursor: "pointer",
-          fontSize: "14px",
-          transition: "background-color 0.3s",
         }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor = "#333")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor = "#555")
-        }
       >
         🚪 로그아웃
       </button>
 
-      <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "10px" }}>
+      <h1 style={{ fontSize: "32px", fontWeight: "bold" }}>
         안녕하세요, {userData.name} 님 👋
       </h1>
-      <h2 style={{ fontSize: "24px", color: "#555", marginBottom: "20px" }}>
-        역할: 보호자
-      </h2>
+      <h2 style={{ color: "#666", marginBottom: "20px" }}>역할: 보호자</h2>
 
       <button
         onClick={() => router.push("/register-baby")}
@@ -200,43 +167,21 @@ export default function NannyDashboard() {
           border: "none",
           padding: "12px 20px",
           borderRadius: "6px",
-          cursor: "pointer",
-          marginBottom: "20px",
           fontSize: "16px",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
         }}
       >
         ➕ 아기 등록하기
       </button>
 
-      <h3 style={{ fontSize: "20px", marginBottom: "10px" }}>🍼 내 아기 목록:</h3>
+      <h3>🍼 내 아기 목록:</h3>
       {babies.length === 0 ? (
         <p>등록된 아기가 없습니다.</p>
       ) : (
-        <ul style={{ listStyleType: "none", padding: "0" }}>
+        <ul style={{ padding: "0" }}>
           {babies.map((baby) => (
-            <li
-              key={baby.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderBottom: "1px solid #ddd",
-                padding: "12px",
-                marginBottom: "8px",
-                backgroundColor: "#fff",
-                borderRadius: "6px",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-              }}
-            >
-              <Link
-                href={`/baby/${baby.id}`}
-                style={{
-                  color: "#4CAF50",
-                  textDecoration: "none",
-                  fontWeight: "500",
-                }}
-              >
+            <li key={baby.id} style={{ backgroundColor: "#fff", padding: "10px", borderRadius: "6px", marginBottom: "10px", display: "flex", justifyContent: "space-between" }}>
+              <Link href={`/baby/${baby.id}`} style={{ color: "#4CAF50", fontWeight: "bold" }}>
                 {baby.name} ({baby.birthdate})
               </Link>
               <button
@@ -245,17 +190,9 @@ export default function NannyDashboard() {
                   backgroundColor: "#f44336",
                   color: "white",
                   border: "none",
-                  padding: "8px 12px",
+                  padding: "6px 12px",
                   borderRadius: "6px",
-                  cursor: "pointer",
-                  transition: "background-color 0.3s",
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor = "#d32f2f")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor = "#f44336")
-                }
               >
                 ❌ 삭제
               </button>
@@ -264,64 +201,26 @@ export default function NannyDashboard() {
         </ul>
       )}
 
-      <h3 style={{ fontSize: "20px", marginBottom: "10px" }}>
-        🔐 접근 요청 목록:
-      </h3>
+      <h3>🔐 접근 요청 목록:</h3>
       {requests.length === 0 ? (
         <p>접근 요청이 없습니다.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {requests.map((req) => (
-            <div
-              key={req.id}
-              style={{
-                border: "1px solid #ccc",
-                borderRadius: "8px",
-                padding: "16px",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-              }}
-            >
+            <div key={req.id} style={{ padding: "12px", border: "1px solid #ccc", borderRadius: "8px", backgroundColor: "#fff" }}>
               <p>👶 아기 ID: {req.babyId}</p>
               <p>🙋 요청자 UID: {req.requestedBy}</p>
               <p>🕒 상태: {req.status}</p>
-              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+              <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
                 <button
                   onClick={() => handleApprove(req)}
-                  style={{
-                    backgroundColor: "#4CAF50",
-                    color: "white",
-                    border: "none",
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    transition: "background-color 0.3s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#388E3C")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#4CAF50")
-                  }
+                  style={{ backgroundColor: "#4CAF50", color: "white", border: "none", padding: "6px 10px", borderRadius: "4px" }}
                 >
                   ✅ 승인
                 </button>
                 <button
                   onClick={() => handleReject(req.id)}
-                  style={{
-                    backgroundColor: "#f44336",
-                    color: "white",
-                    border: "none",
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    transition: "background-color 0.3s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#d32f2f")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#f44336")
-                  }
+                  style={{ backgroundColor: "#f44336", color: "white", border: "none", padding: "6px 10px", borderRadius: "4px" }}
                 >
                   ❌ 거절
                 </button>

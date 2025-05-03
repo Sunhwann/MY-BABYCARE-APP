@@ -45,6 +45,11 @@ export default function NannyDashboard() {
       setBabies(babyList);
     };
 
+    type RequestData = {
+      status: string;
+      [key: string]: any;
+    };
+
     const fetchAccessRequests = async () => {
       const snapshot = await getDocs(collection(db, "accessRequests"));
       const requestList = snapshot.docs

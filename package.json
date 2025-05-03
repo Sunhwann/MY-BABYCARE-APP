@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@netlify/plugin-nextjs": "^5.10.7",
     "date-fns": "^4.1.0",
     "firebase": "^11.6.0",
     "firebase-functions": "^6.3.2",

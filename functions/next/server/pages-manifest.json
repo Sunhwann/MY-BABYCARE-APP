@@ -1,10 +1,17 @@
 {
-  "/": "pages/index.js",
-  "/_app": "pages/_app.js",
   "/_document": "pages/_document.js",
+  "/api/hello": "pages/api/hello.js",
+  "/_app": "pages/_app.js",
+  "/baby/[babyId]": "pages/baby/[babyId].html",
+  "/": "pages/index.html",
+  "/dashboard": "pages/dashboard.html",
+  "/login": "pages/login.html",
+  "/parent-dashboard": "pages/parent-dashboard.html",
+  "/register-baby": "pages/register-baby.html",
+  "/register": "pages/register.html",
+  "/nanny-dashboard": "pages/nanny-dashboard.html",
+  "/request-access": "pages/request-access.html",
+  "/requests": "pages/requests.html",
   "/_error": "pages/_error.js",
-  "/baby/[babyId]": "pages/baby/[babyId].js",
-  "/login": "pages/login.js",
-  "/nanny-dashboard": "pages/nanny-dashboard.js",
-  "/parent-dashboard": "pages/parent-dashboard.js"
+  "/404": "pages/404.html"
 }

@@ -1,28 +1,26 @@
+// pages/login.tsx
 import { googleLogin, facebookLogin } from "../lib/auth";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { useTranslation } from "react-i18next";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
 
   const handleGoogle = async () => {
     try {
-      await googleLogin(); // 로그인만 수행
-      // 이후 auth 상태가 바뀌면 onAuthStateChanged에서 처리
+      await googleLogin();
     } catch (e) {
       alert("로그인 실패");
     }
   };
 
-  const handleFacebook = async () => {
-    try {
-      await facebookLogin();
-    } catch (e) {
-      alert("로그인 실패");
-    }
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
   };
 
   useEffect(() => {
@@ -31,7 +29,7 @@ export default function LoginPage() {
 
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (!userDoc.exists()) {
-        router.push("/register"); // 최초 로그인 시 등록 페이지로
+        router.push("/register");
         return;
       }
 
@@ -49,10 +47,68 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div style={{ padding: 40 }}>
-      <h2>로그인</h2>
-      <button onClick={handleGoogle}>구글 로그인</button>
-      <br />
+    <div style={{ padding: 40, maxWidth: 400, margin: "auto" }}>
+    <div style={{ textAlign: "right", marginBottom: 20 }}>
+      <button
+        onClick={() => handleLanguageChange("ko")}
+        style={{
+          fontSize: 24,
+          padding: "8px 12px",
+          marginLeft: 8,
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        🇰🇷
+      </button>
+      <button
+        onClick={() => handleLanguageChange("en")}
+        style={{
+          fontSize: 24,
+          padding: "8px 12px",
+          marginLeft: 8,
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        🇺🇸
+      </button>
+      <button
+        onClick={() => handleLanguageChange("vi")}
+        style={{
+          fontSize: 24,
+          padding: "8px 12px",
+          marginLeft: 8,
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        🇻🇳
+      </button>
+    </div>
+  
+
+
+
+      <button
+        onClick={handleGoogle}
+        style={{
+          backgroundColor: "#4285F4",
+          color: "#fff",
+          padding: "10px 20px",
+          border: "none",
+          borderRadius: "5px",
+          fontSize: "16px",
+          cursor: "pointer",
+          width: "100%",
+          marginTop: 20,
+        }}
+      >
+        {t("googleLogin")}
+      </button>
+
+      {/* 추후 확장용 */}
+      {/* <button onClick={handleFacebook}>Facebook Login</button> */}
     </div>
   );
 }

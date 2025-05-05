@@ -12,11 +12,18 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
+import { signOut } from "firebase/auth";
+import { useTranslation } from "react-i18next";
 
 export default function NannyDashboard() {
   const [babies, setBabies] = useState<any[]>([]);
   const [userData, setUserData] = useState<any>(null);
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+  };
 
   useEffect(() => {
     const fetchUserDataAndBabies = async () => {
@@ -46,7 +53,7 @@ export default function NannyDashboard() {
 
   const handleRemoveBaby = async (babyId: string) => {
     if (!auth.currentUser) return;
-    const confirm = window.confirm("정말 이 아기를 목록에서 삭제하시겠습니까?");
+    const confirm = window.confirm(t("confirmRemove"));
     if (!confirm) return;
 
     try {
@@ -58,11 +65,21 @@ export default function NannyDashboard() {
       setBabies((prev) => prev.filter((b) => b.id !== babyId));
     } catch (error) {
       console.error("삭제 중 오류 발생:", error);
-      alert("삭제에 실패했습니다.");
+      alert(t("deleteError"));
     }
   };
 
-  if (!userData) return <div>로딩 중...</div>;
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
+      alert(t("logoutError"));
+    }
+  };
+
+  if (!userData) return <div>{t("loading")}</div>;
 
   return (
     <div
@@ -72,12 +89,34 @@ export default function NannyDashboard() {
         minHeight: "100vh",
         padding: "20px",
         fontFamily: "sans-serif",
+        position: "relative",
       }}
     >
+      {/* 언어 선택 및 로그아웃 버튼 */}
+      <div style={{ position: "absolute", top: "20px", right: "20px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
+        <div>
+          <button onClick={() => handleLanguageChange("ko")} style={{ fontSize: "24px", marginRight: "8px" }}>🇰🇷</button>
+          <button onClick={() => handleLanguageChange("en")} style={{ fontSize: "24px", marginRight: "8px" }}>🇺🇸</button>
+          <button onClick={() => handleLanguageChange("vi")} style={{ fontSize: "24px" }}>🇻🇳</button>
+        </div>
+        <button
+          onClick={handleLogout}
+          style={{
+            backgroundColor: "#555",
+            color: "#fff",
+            borderRadius: "6px",
+            padding: "8px 14px",
+            cursor: "pointer",
+          }}
+        >
+          🚪 {t("logout")}
+        </button>
+      </div>
+
       <h1 style={{ fontWeight: "bold" }}>
-        안녕하세요, {userData.name} 님 👋
+        {t("hello")}, {userData.name} 👋
       </h1>
-      <h2 style={{ marginTop: "5px", color: "#555" }}>역할: 도우미</h2>
+      <h2 style={{ marginTop: "5px", color: "#555" }}>{t("role")}: {t("nanny")}</h2>
 
       <button
         onClick={() => router.push("/request-access")}
@@ -92,13 +131,13 @@ export default function NannyDashboard() {
           cursor: "pointer",
         }}
       >
-        ➕ 아기 추가하기
+        ➕ {t("addBaby")}
       </button>
 
-      <h3 style={{ marginTop: "20px" }}>🍼 맡은 아기 목록:</h3>
+      <h3 style={{ marginTop: "20px" }}>🍼 {t("assignedBabies")}:</h3>
 
       {babies.length === 0 ? (
-        <p>맡은 아기가 없습니다.</p>
+        <p>{t("noAssignedBabies")}</p>
       ) : (
         <ul style={{ paddingLeft: "0", listStyle: "none" }}>
           {babies.map((baby) => (
@@ -132,7 +171,7 @@ export default function NannyDashboard() {
                   cursor: "pointer",
                 }}
               >
-                삭제
+                {t("remove")}
               </button>
             </li>
           ))}

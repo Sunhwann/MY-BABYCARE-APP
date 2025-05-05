@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 
 type Baby = {
   id: string;
@@ -38,6 +39,11 @@ export default function NannyDashboard() {
   const [userData, setUserData] = useState<User | null>(null);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -78,7 +84,7 @@ export default function NannyDashboard() {
     try {
       const babyRef = doc(db, "babies", req.babyId);
       const babyDoc = await getDoc(babyRef);
-      if (!babyDoc.exists()) return alert("❌ 아기 정보를 찾을 수 없습니다.");
+      if (!babyDoc.exists()) return alert(t("noBabyInfo"));
 
       const shared = babyDoc.data().sharedWith || [];
       await updateDoc(babyRef, {
@@ -87,10 +93,10 @@ export default function NannyDashboard() {
 
       await deleteDoc(doc(db, "accessRequests", req.id));
       await refreshRequests();
-      alert("✅ 접근 요청을 승인했습니다.");
+      alert(t("approved"));
     } catch (err) {
       console.error(err);
-      alert("⚠️ 승인 처리 중 오류가 발생했습니다.");
+      alert(t("approvalError"));
     }
   };
 
@@ -98,10 +104,10 @@ export default function NannyDashboard() {
     try {
       await deleteDoc(doc(db, "accessRequests", id));
       setRequests((prev) => prev.filter((r) => r.id !== id));
-      alert("❌ 요청이 거절되었습니다.");
+      alert(t("rejected"));
     } catch (err) {
       console.error(err);
-      alert("⚠️ 거절 처리 중 오류 발생.");
+      alert(t("rejectionError"));
     }
   };
 
@@ -109,10 +115,10 @@ export default function NannyDashboard() {
     try {
       await deleteDoc(doc(db, "babies", babyId));
       setBabies((prev) => prev.filter((baby) => baby.id !== babyId));
-      alert("✅ 아기를 삭제했습니다.");
+      alert(t("babyDeleted"));
     } catch (err) {
       console.error(err);
-      alert("⚠️ 삭제 중 오류 발생.");
+      alert(t("deleteError"));
     }
   };
 
@@ -121,8 +127,8 @@ export default function NannyDashboard() {
       await signOut(auth);
       router.push("/login");
     } catch (err) {
-      console.error("로그아웃 실패:", err);
-      alert("⚠️ 로그아웃 오류.");
+      console.error("Logout error:", err);
+      alert(t("logoutError"));
     }
   };
 
@@ -134,95 +140,80 @@ export default function NannyDashboard() {
     setRequests(updated);
   };
 
-  if (!userData) return <div>로딩 중...</div>;
+  if (!userData) return <div className="text-black">{t("loading")}</div>;
 
   return (
-    <div style={{ padding: "20px", backgroundColor: "#f9f9f9", minHeight: "100vh", position: "relative" }}>
-      <button
-        onClick={handleLogout}
-        style={{
-          position: "absolute",
-          top: "20px",
-          right: "20px",
-          backgroundColor: "#555",
-          color: "#fff",
-          borderRadius: "6px",
-          padding: "8px 14px",
-          cursor: "pointer",
-        }}
-      >
-        🚪 로그아웃
-      </button>
+    <div className="p-5 bg-gray-100 min-h-screen relative text-black">
+  {/* 오른쪽 상단 버튼 그룹 */}
+  <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
+    {/* 언어 선택 (가로 정렬) */}
+    <div className="flex gap-2">
+      <button onClick={() => handleLanguageChange("ko")} className="text-2xl">🇰🇷</button>
+      <button onClick={() => handleLanguageChange("en")} className="text-2xl">🇺🇸</button>
+      <button onClick={() => handleLanguageChange("vi")} className="text-2xl">🇻🇳</button>
+    </div>
+    {/* 로그아웃 버튼 (아래쪽) */}
+    <button
+      onClick={handleLogout}
+      className="bg-gray-700 text-white rounded-md px-4 py-2 text-sm"
+    >
+      🚪 {t("logout")}
+    </button>
+  </div>
 
-      <h1 style={{ fontSize: "32px", fontWeight: "bold" }}>
-        안녕하세요, {userData.name} 님 👋
-      </h1>
-      <h2 style={{ color: "#666", marginBottom: "20px" }}>역할: 보호자</h2>
+      <h1 className="text-3xl font-bold">{t("hello")}, {userData.name} 👋</h1>
+      <h2 className="text-black mb-4">{t("role")}: {t("parent")}</h2>
 
       <button
         onClick={() => router.push("/register-baby")}
-        style={{
-          backgroundColor: "#4CAF50",
-          color: "white",
-          border: "none",
-          padding: "12px 20px",
-          borderRadius: "6px",
-          fontSize: "16px",
-          marginBottom: "20px",
-        }}
+        className="bg-green-500 text-white px-5 py-3 rounded-md text-lg mb-5"
       >
-        ➕ 아기 등록하기
+        {t("registerBaby")}
       </button>
 
-      <h3>🍼 내 아기 목록:</h3>
+      <h3 className="text-xl font-semibold mb-2">🍼 {t("myBabies")}:</h3>
       {babies.length === 0 ? (
-        <p>등록된 아기가 없습니다.</p>
+        <p className="text-black">{t("noBabies")}</p>
       ) : (
-        <ul style={{ padding: "0" }}>
+        <ul className="space-y-3">
           {babies.map((baby) => (
-            <li key={baby.id} style={{ backgroundColor: "#fff", padding: "10px", borderRadius: "6px", marginBottom: "10px", display: "flex", justifyContent: "space-between" }}>
-              <Link href={`/baby/${baby.id}`} style={{ color: "#4CAF50", fontWeight: "bold" }}>
+            <li key={baby.id} className="bg-white p-3 rounded-md flex justify-between items-center shadow-sm">
+              <Link href={`/baby/${baby.id}`} className="text-green-600 font-semibold">
                 {baby.name} ({baby.birthdate})
               </Link>
               <button
                 onClick={() => handleDeleteBaby(baby.id)}
-                style={{
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  border: "none",
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                }}
+                className="bg-red-500 text-white px-3 py-1 rounded-md"
               >
-                ❌ 삭제
+                ❌ {t("delete")}
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      <h3>🔐 접근 요청 목록:</h3>
+      <h3 className="text-xl font-semibold mt-8 mb-2">🔐 {t("accessRequests")}:</h3>
       {requests.length === 0 ? (
-        <p>접근 요청이 없습니다.</p>
+        <p className="text-black">{t("noRequests")}</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div className="flex flex-col gap-4">
           {requests.map((req) => (
-            <div key={req.id} style={{ padding: "12px", border: "1px solid #ccc", borderRadius: "8px", backgroundColor: "#fff" }}>
-              <p>👶 아기 ID: {req.babyId}</p>
-              <p>🙋 요청자 UID: {req.requestedBy}</p>
-              <p>🕒 상태: {req.status}</p>
-              <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+            <div key={req.id} className="bg-white p-4 rounded-lg shadow-sm">
+              <p>👶 {t("babyId")}: {req.babyId}</p>
+              <p>🙋 {t("requester")}: {req.requestedBy}</p>
+              <p>🕒 {t("status")}: {req.status}</p>
+              <div className="mt-2 flex gap-3">
                 <button
                   onClick={() => handleApprove(req)}
-                  style={{ backgroundColor: "#4CAF50", color: "white", border: "none", padding: "6px 10px", borderRadius: "4px" }}
+                  className="bg-green-500 text-white px-3 py-1 rounded-md"
                 >
-                  ✅ 승인
+                  ✅ {t("approve")}
                 </button>
                 <button
                   onClick={() => handleReject(req.id)}
-                  style={{ backgroundColor: "#f44336", color: "white", border: "none", padding: "6px 10px", borderRadius: "4px" }}
+                  className="bg-red-500 text-white px-3 py-1 rounded-md"
                 >
-                  ❌ 거절
+                  ❌ {t("reject")}
                 </button>
               </div>
             </div>

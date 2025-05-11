@@ -43,15 +43,22 @@ export default function BabyPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchBaby = async () => {
-      if (!babyId) return;
-      const docRef = doc(db, "babies", babyId as string);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setBabyData(docSnap.data());
+    const fetchWeights = async () => {
+      const babyIdStr = Array.isArray(babyId) ? babyId[0] : babyId;
+      if (!babyIdStr) return;
+  
+      try {
+        const docRef = doc(db, "weights", babyIdStr);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setWeights(docSnap.data());
+        }
+      } catch (err) {
+        console.error("Failed to fetch weights:", err);
       }
     };
-    fetchBaby();
+  
+    fetchWeights();
   }, [babyId]);
 
   const fetchRecords = async () => {

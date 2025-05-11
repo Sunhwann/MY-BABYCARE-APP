@@ -44,9 +44,11 @@ export default function BabyPage() {
 
   useEffect(() => {
     const fetchWeights = async () => {
-      const babyIdStr = Array.isArray(babyId) ? babyId[0] : babyId;
-      if (!babyIdStr) return;
-  
+      // 1) babyId가 문자열인지 체크
+      if (typeof babyId !== "string") return;
+      // 2) 안전하게 babyId를 string으로 사용
+      const babyIdStr = babyId;
+
       try {
         const docRef = doc(db, "weights", babyIdStr);
         const docSnap = await getDoc(docRef);
@@ -57,9 +59,9 @@ export default function BabyPage() {
         console.error("Failed to fetch weights:", err);
       }
     };
-  
+
     fetchWeights();
-  }, [babyId]);
+  }, [babyId]);  // babyId 가 바뀔 때마다
 
   const fetchRecords = async () => {
     if (!babyId || !weekStartDate) return;

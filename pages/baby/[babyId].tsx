@@ -17,6 +17,8 @@ import { format, startOfWeek, addDays } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 
+
+
 export default function BabyPage() {
   const router = useRouter();
   const { babyId } = router.query;
@@ -42,26 +44,7 @@ export default function BabyPage() {
   const [activeTab, setActiveTab] = useState<"input" | "output">("input");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchWeights = async () => {
-      // 1) babyId가 문자열인지 체크
-      if (typeof babyId !== "string") return;
-      // 2) 안전하게 babyId를 string으로 사용
-      const babyIdStr = babyId;
-
-      try {
-        const docRef = doc(db, "weights", babyIdStr);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setWeights(docSnap.data());
-        }
-      } catch (err) {
-        console.error("Failed to fetch weights:", err);
-      }
-    };
-
-    fetchWeights();
-  }, [babyId]);  // babyId 가 바뀔 때마다
+ 
 
   const fetchRecords = async () => {
     if (!babyId || !weekStartDate) return;
@@ -86,20 +69,27 @@ export default function BabyPage() {
 
   const [weights, setWeights] = useState<{ [date: string]: number }>({});
 
-useEffect(() => {
-  const fetchWeights = async () => {
-    const docRef = doc(db, "weights", babyId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      setWeights(docSnap.data());
-    } else {
-      setWeights({});
-    }
-  };
+  useEffect(() => {
+    if (typeof babyId !== "string") return;
+  
+    const fetchWeights = async () => {
+      try {
+        const docRef = doc(db, "weights", babyId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setWeights(docSnap.data());
+        } else {
+          setWeights({});
+        }
+      } catch (err) {
+        console.error("Failed to fetch weights:", err);
+      }
+    };
+  
+    fetchWeights();
+  }, [babyId]);
 
-  fetchWeights();
-}, [babyId]);
-
+  
   const handleSave = async () => {
     if (!babyId || !selectedDate || !selectedType) return;
     if ((selectedType === "분유" || selectedType === "모유") && !amount) return;

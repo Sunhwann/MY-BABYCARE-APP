@@ -89,7 +89,7 @@ export default function BabyPage() {
     fetchWeights();
   }, [babyId]);
 
-  
+
   const handleSave = async () => {
     if (!babyId || !selectedDate || !selectedType) return;
     if ((selectedType === "분유" || selectedType === "모유") && !amount) return;
@@ -160,30 +160,31 @@ export default function BabyPage() {
   };
   
   const handleSaveWeight = async () => {
-    if (!babyId || !weight || !selectedDate) return;
-  
-    const formattedDate = format(selectedDate, "yyyy-MM-dd");
-    const docRef = doc(db, "weights", babyId);
-  
-    try {
-      await setDoc(docRef, {
-        [formattedDate]: parseFloat(weight)
-      }, { merge: true });
-  
-      // ✅ 저장 후 상태 업데이트
-      setWeights((prev) => ({
-        ...prev,
-        [formattedDate]: parseFloat(weight)
-      }));
-  
-      setWeightSaveMessage("✅ 저장되었습니다.");
-      setTimeout(() => setWeightSaveMessage(""), 2000);
-    } catch (error) {
-      console.error("몸무게 저장 실패:", error);
-      setWeightSaveMessage("❌ 저장 실패");
-    }
-  };
-  
+  // babyId가 string이 아닐 경우 early return
+  if (typeof babyId !== "string" || !weight || !selectedDate) return;
+
+  const formattedDate = format(selectedDate, "yyyy-MM-dd");
+  const docRef = doc(db, "weights", babyId); // 이제 타입 오류 없음
+
+  try {
+    await setDoc(docRef, {
+      [formattedDate]: parseFloat(weight)
+    }, { merge: true });
+
+    // ✅ 저장 후 상태 업데이트
+    setWeights((prev) => ({
+      ...prev,
+      [formattedDate]: parseFloat(weight)
+    }));
+
+    setWeightSaveMessage("✅ 저장되었습니다.");
+    setTimeout(() => setWeightSaveMessage(""), 2000);
+  } catch (error) {
+    console.error("몸무게 저장 실패:", error);
+    setWeightSaveMessage("❌ 저장 실패");
+  }
+};
+
   
   return (
     <div style={{ padding: "1rem", backgroundColor: "#fff", color: "#000", minHeight: "100vh" }}>
